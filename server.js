@@ -7,6 +7,11 @@ const session = require('express-session');
 
 const app = express();
 
+console.log("VARIABLES MYSQL:");
+console.log("HOST:", process.env.DB_HOST);
+console.log("USER:", process.env.DB_USER);
+console.log("DATABASE:", process.env.DB_NAME);
+
 app.set('trust proxy', 1);
 // Railway asigna el puerto automáticamente
 const PORT = process.env.PORT || 3000;
