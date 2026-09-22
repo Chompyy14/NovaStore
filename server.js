@@ -1,8 +1,13 @@
+require('dotenv').config();
+
 const express = require('express');
+
 const path = require('path');
 const session = require('express-session');
 
 const app = express();
+
+app.set('trust proxy', 1);
 // Railway asigna el puerto automáticamente
 const PORT = process.env.PORT || 3000;
 
