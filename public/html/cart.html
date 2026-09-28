@@ -282,64 +282,162 @@ async function inicializar() {
 }
 
 async function cargarCarrito() {
-    const res = await fetch('/cart');
-    const cart = await res.json();
+    try {
+        // Obtenemos carrito y productos al mismo tiempo
+        const [resCart, resProductos] = await Promise.all([
+            fetch('/cart'),
+            fetch('/products')
+        ]);
 
-    const contenedor = document.getElementById('cartItems');
-    contenedor.innerHTML = '';
+        if (resCart.status === 401) {
+            alert('Tu sesión expiró. Inicia sesión nuevamente.');
+            window.location.href = '/html/login.html';
+            return;
+        }
 
-    if (!cart || cart.length === 0) {
+        if (!resCart.ok) {
+            throw new Error('No se pudo obtener el carrito');
+        }
 
-    contenedor.innerHTML = `
-        <p style="
-            text-align:center;
-            color:var(--gray-text);
-            padding:3rem;
-        ">
-            Tu carrito está vacío
-        </p>
-    `;
+        if (!resProductos.ok) {
+            throw new Error('No se pudieron obtener los productos');
+        }
 
-    totalCompra = 0;
+        const cart = await resCart.json();
+        const productos = await resProductos.json();
 
-    document.getElementById(
-        'totalAmount'
-    ).textContent = '$0';
+        const contenedor = document.getElementById('cartItems');
+        contenedor.innerHTML = '';
 
-    verificarBotonCompra();
+        // ================================
+        // CARRITO VACÍO
+        // ================================
+        if (!cart || cart.length === 0) {
+            contenedor.innerHTML = `
+                <p style="
+                    text-align:center;
+                    color:var(--gray-text);
+                    padding:3rem;
+                ">
+                    Tu carrito está vacío
+                </p>
+            `;
 
-    return;
-}
+            totalCompra = 0;
 
-    totalCompra = 0;
+            document.getElementById(
+                'totalAmount'
+            ).textContent = '$0';
 
-    cart.forEach(p => {
-        const subtotal = p.precio * p.cantidad;
-        totalCompra += subtotal;
+            verificarBotonCompra();
 
-        contenedor.innerHTML += `
-            <div class="cart-item">
-                <img
-                    src="${p.imagen}"
-                    class="cart-item-img"
-                    alt="${p.nombre}"
-                    onerror="this.onerror=null; this.style.display='none';"
-                >
-                <div>
-                    <h4>${p.nombre}</h4>
-                    <p style="color:var(--gray-text);">Cantidad: ${p.cantidad}</p>
+            return;
+        }
+
+        totalCompra = 0;
+
+        // ================================
+        // MOSTRAR PRODUCTOS
+        // ================================
+        cart.forEach(item => {
+
+            // Buscar información actual del producto
+            const productoBD = productos.find(
+                producto =>
+                    Number(producto.id) ===
+                    Number(item.productId)
+            );
+
+            // Tomar la misma imagen que usa el catálogo
+            let imagen = item.imagen;
+
+            if (productoBD) {
+
+                if (
+                    productoBD.galeria &&
+                    productoBD.galeria.length > 0
+                ) {
+                    imagen = productoBD.galeria[0];
+
+                } else if (productoBD.imagen) {
+
+                    imagen = productoBD.imagen;
+                }
+            }
+
+            const precio = Number(item.precio);
+            const cantidad = Number(item.cantidad);
+            const subtotal = precio * cantidad;
+
+            totalCompra += subtotal;
+
+            contenedor.innerHTML += `
+                <div class="cart-item">
+
+                    <img
+                        src="${imagen}"
+                        class="cart-item-img"
+                        alt="${item.nombre}"
+                        onerror="
+                            console.error(
+                                'Imagen no encontrada:',
+                                this.src
+                            );
+                        "
+                    >
+
+                    <div>
+                        <h4>${item.nombre}</h4>
+
+                        <p style="
+                            color:var(--gray-text);
+                        ">
+                            Cantidad: ${cantidad}
+                        </p>
+                    </div>
+
+                    <span>
+                        $${precio.toLocaleString()}
+                    </span>
+
+                    <span style="
+                        color:var(--secondary);
+                        font-weight:bold;
+                    ">
+                        $${subtotal.toLocaleString()}
+                    </span>
+
+                    <button
+                        type="button"
+                        class="btn-remove"
+                        data-product-id="${item.productId}"
+                        title="Eliminar del carrito"
+                    >
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+
                 </div>
-                <span>$${p.precio.toLocaleString()}</span>
-                <span style="color:var(--secondary); font-weight:bold;">$${subtotal.toLocaleString()}</span>
-                <button class="btn-remove" onclick="eliminarItem(${p.productId})">
-                    <i class="fa-solid fa-trash"></i>
-                </button>
-            </div>
-        `;
-    });
+            `;
+        });
 
-    document.getElementById('totalAmount').textContent = '$' + totalCompra.toLocaleString();
-    verificarBotonCompra();
+        document.getElementById(
+            'totalAmount'
+        ).textContent =
+            '$' + totalCompra.toLocaleString();
+
+        verificarBotonCompra();
+
+    } catch (error) {
+
+        console.error(
+            'Error cargando carrito:',
+            error
+        );
+
+        alert(
+            '❌ No se pudo cargar correctamente el carrito'
+        );
+    }
 }
 
 async function cargarMetodosPago() {
