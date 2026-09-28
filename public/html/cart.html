@@ -289,10 +289,27 @@ async function cargarCarrito() {
     contenedor.innerHTML = '';
 
     if (!cart || cart.length === 0) {
-        contenedor.innerHTML = '<p style="text-align:center; color:var(--gray-text); padding:3rem;">Tu carrito está vacío</p>';
-        document.getElementById('totalAmount').textContent = '$0';
-        return;
-    }
+
+    contenedor.innerHTML = `
+        <p style="
+            text-align:center;
+            color:var(--gray-text);
+            padding:3rem;
+        ">
+            Tu carrito está vacío
+        </p>
+    `;
+
+    totalCompra = 0;
+
+    document.getElementById(
+        'totalAmount'
+    ).textContent = '$0';
+
+    verificarBotonCompra();
+
+    return;
+}
 
     totalCompra = 0;
 
@@ -302,7 +319,12 @@ async function cargarCarrito() {
 
         contenedor.innerHTML += `
             <div class="cart-item">
-                <img src="/img/default.png" class="cart-item-img" onerror="this.src='/img/default.png'">
+                <img
+                    src="${p.imagen}"
+                    class="cart-item-img"
+                    alt="${p.nombre}"
+                    onerror="this.onerror=null; this.style.display='none';"
+                >
                 <div>
                     <h4>${p.nombre}</h4>
                     <p style="color:var(--gray-text);">Cantidad: ${p.cantidad}</p>
@@ -369,6 +391,66 @@ function seleccionarMetodo(id, elemento) {
 function verificarBotonCompra() {
     const btn = document.getElementById('checkoutBtn');
     btn.disabled = !(metodoSeleccionado && totalCompra > 0);
+}
+
+// ============================================
+// ELIMINAR PRODUCTO DEL CARRITO
+// ============================================
+async function eliminarItem(productId) {
+
+    try {
+
+        const res = await fetch('/cart/remove', {
+
+            method: 'POST',
+
+            headers: {
+                'Content-Type': 'application/json'
+            },
+
+            body: JSON.stringify({
+                productId: productId
+            })
+
+        });
+
+
+        if (!res.ok) {
+
+            const mensaje = await res.text();
+
+            console.error(
+                'Error eliminando producto:',
+                mensaje
+            );
+
+            alert('❌ No se pudo eliminar el producto');
+
+            return;
+
+        }
+
+
+        // Volver a consultar el carrito
+        // Esto actualiza automáticamente:
+        // - productos
+        // - imágenes
+        // - total
+        // - botón de compra
+        await cargarCarrito();
+
+
+    } catch (error) {
+
+        console.error(
+            'Error eliminando producto:',
+            error
+        );
+
+        alert('❌ Error eliminando producto');
+
+    }
+
 }
 
 async function realizarCompra() {
