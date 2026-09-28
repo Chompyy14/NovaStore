@@ -86,27 +86,37 @@ router.get('/', isAuth, async (req, res) => {
 // 2. AGREGAR PRODUCTO AL CARRITO
 // ============================================
 router.post('/add', isAuth, async (req, res) => {
-
     try {
-
         const { productId, cantidad } = req.body;
 
-        // Convertir los valores explícitamente a número
         const idProducto = Number(productId);
         const cantidadProducto = Number(cantidad) || 1;
 
-        if (!req.session.cart) {
-            req.session.cart = [];
+        if (
+            !Number.isInteger(idProducto) ||
+            idProducto <= 0
+        ) {
+            return res.status(400).json({
+                error: 'ID de producto inválido'
+            });
         }
 
-        // IMPORTANTE:
-        // Ahora también recuperamos "imagen"
+        if (
+            !Number.isInteger(cantidadProducto) ||
+            cantidadProducto <= 0
+        ) {
+            return res.status(400).json({
+                error: 'Cantidad inválida'
+            });
+        }
+
         const [result] = await db.query(
             `SELECT
                 id,
                 nombre,
                 precio,
-                imagen
+                imagen,
+                stock
              FROM products
              WHERE id = ?`,
             [idProducto]
@@ -120,22 +130,37 @@ router.post('/add', isAuth, async (req, res) => {
 
         const prod = result[0];
 
-        // Buscar si el producto ya estaba en el carrito
+        if (prod.stock < cantidadProducto) {
+            return res.status(400).json({
+                error: 'No hay suficiente stock'
+            });
+        }
+
+        if (!req.session.cart) {
+            req.session.cart = [];
+        }
+
         const item = req.session.cart.find(
-            p => Number(p.productId) === Number(prod.id)
+            p =>
+                Number(p.productId) ===
+                Number(prod.id)
         );
 
         if (item) {
+            const nuevaCantidad =
+                Number(item.cantidad) +
+                cantidadProducto;
 
-            // Si ya estaba, aumentar cantidad
-            item.cantidad += cantidadProducto;
+            if (nuevaCantidad > prod.stock) {
+                return res.status(400).json({
+                    error: 'La cantidad supera el stock disponible'
+                });
+            }
 
-            // Actualizar también la imagen
+            item.cantidad = nuevaCantidad;
             item.imagen = prod.imagen;
 
         } else {
-
-            // Si no estaba, agregarlo
             req.session.cart.push({
                 productId: prod.id,
                 nombre: prod.nombre,
@@ -143,39 +168,33 @@ router.post('/add', isAuth, async (req, res) => {
                 cantidad: cantidadProducto,
                 imagen: prod.imagen
             });
-
         }
 
-        // Guardar explícitamente la sesión
         req.session.save(err => {
-
             if (err) {
-
                 console.error(
-                    'Error guardando carrito en sesión:',
+                    'Error guardando sesión:',
                     err
                 );
 
                 return res.status(500).json({
                     error: 'Error guardando carrito'
                 });
-
             }
 
             res.json(req.session.cart);
-
         });
 
     } catch (error) {
-
-        console.error('Error agregando producto:', error);
+        console.error(
+            'Error POST /cart/add:',
+            error
+        );
 
         res.status(500).json({
             error: 'Error agregando producto'
         });
-
     }
-
 });
 
 

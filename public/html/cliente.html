@@ -155,11 +155,33 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function actualizarContador() {
-  const res = await fetch('/cart');
-  if (!res.ok) return;
-  const cart = await res.json();
-  document.getElementById('cartCount').textContent =
-    cart.reduce((s,p)=>s+p.cantidad,0);
+    try {
+        const res = await fetch('/cart');
+
+        if (res.status === 401) {
+            document.getElementById('cartCount').textContent = '0';
+            return;
+        }
+
+        if (!res.ok) {
+            return;
+        }
+
+        const cart = await res.json();
+
+        document.getElementById('cartCount').textContent =
+            cart.reduce(
+                (total, producto) =>
+                    total + Number(producto.cantidad),
+                0
+            );
+
+    } catch (error) {
+        console.error(
+            'Error actualizando contador:',
+            error
+        );
+    }
 }
 
 actualizarContador();
@@ -367,16 +389,60 @@ function mostrarError() {
 }
 
 async function comprar(productId) {
-  const res = await fetch('/cart/add', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ productId, cantidad: 1 })
-  });
+    try {
+        const res = await fetch('/cart/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                productId: productId,
+                cantidad: 1
+            })
+        });
 
-  if (res.ok) {
-    alert('🛒 Producto agregado al carrito');
-    actualizarContador();
-  }
+        if (res.ok) {
+            alert('🛒 Producto agregado al carrito');
+            await actualizarContador();
+            return;
+        }
+
+        // Leer el error verdadero enviado por el servidor
+        let mensaje = 'No se pudo agregar el producto';
+
+        try {
+            const error = await res.json();
+
+            mensaje =
+                error.error ||
+                error.msg ||
+                mensaje;
+        } catch {
+            mensaje = await res.text() || mensaje;
+        }
+
+        console.error(
+            'Error /cart/add:',
+            res.status,
+            mensaje
+        );
+
+        if (res.status === 401) {
+            alert('Tu sesión expiró. Inicia sesión nuevamente.');
+            window.location.href = '/html/login.html';
+            return;
+        }
+
+        alert('❌ ' + mensaje);
+
+    } catch (error) {
+        console.error(
+            'Error agregando al carrito:',
+            error
+        );
+
+        alert('❌ Error de conexión al agregar el producto');
+    }
 }
 
 // Variables globales del modal
@@ -486,90 +552,72 @@ function seleccionarImagen(index) {
 
 // Agregar al carrito desde modal
 async function agregarDesdeModal() {
-    if (!productoActual) return;
-    
-    const res = await fetch('/cart/add', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ productId: productoActual.id, cantidad: 1 })
-    });
+    if (!productoActual) {
+        return;
+    }
 
-    if (res.ok) {
-        alert('✅ Producto agregado al carrito');
-        actualizarContador();
-        cerrarModal();
-    } else {
-        alert('❌ Error al agregar al carrito');
+    try {
+        const res = await fetch('/cart/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                productId: productoActual.id,
+                cantidad: 1
+            })
+        });
+
+        if (res.ok) {
+            alert('✅ Producto agregado al carrito');
+
+            await actualizarContador();
+
+            cerrarModal();
+
+            return;
+        }
+
+        let mensaje = 'No se pudo agregar el producto';
+
+        try {
+            const error = await res.json();
+
+            mensaje =
+                error.error ||
+                error.msg ||
+                mensaje;
+        } catch {
+            mensaje = await res.text() || mensaje;
+        }
+
+        console.error(
+            'Error /cart/add:',
+            res.status,
+            mensaje
+        );
+
+        if (res.status === 401) {
+            alert('Tu sesión expiró. Inicia sesión nuevamente.');
+            window.location.href = '/html/login.html';
+            return;
+        }
+
+        alert('❌ ' + mensaje);
+
+    } catch (error) {
+        console.error(
+            'Error agregando desde modal:',
+            error
+        );
+
+        alert('❌ Error de conexión al agregar el producto');
     }
 }
 
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') cerrarModal();
 });
-</script>
-
-<!-- ======================================================== -->
-<!-- PASO 4: REEMPLAZAR LA FUNCIÓN renderProductos EXISTENTE -->
-<!-- ======================================================== -->
-<script>
-function renderProductos(products) {
-    const contenedor = document.getElementById('products');
-    contenedor.innerHTML = '';
-
-    if (products.length === 0) {
-        contenedor.innerHTML = '<div class="empty-state">No hay productos</div>';
-        return;
-    }
-
-    products.forEach(p => {
-        const imagenes = p.galeria && p.galeria.length > 0 ? p.galeria : [p.imagen];
-        
-        let slidesHTML = '';
-        imagenes.forEach((img, index) => {
-            const activeClass = index === 0 ? 'active' : '';
-            slidesHTML += `<img src="${img}" class="carousel-slide ${activeClass}" id="img-${p.id}-${index}">`;
-        });
-
-        const botonesHTML = imagenes.length > 1 ? `
-            <a class="prev" onclick="moverSlide(event, ${p.id}, -1)">&#10094;</a>
-            <a class="next" onclick="moverSlide(event, ${p.id}, 1)">&#10095;</a>
-        ` : '';
-
-        const card = document.createElement('div');
-        card.className = 'card';
-        card.style.cursor = 'pointer';
-        
-        // ESTO ES LO IMPORTANTE: Al hacer clic en la tarjeta, abre el modal
-        card.onclick = (e) => {
-            // No abrir modal si se hizo clic en flechas o botón
-            if (e.target.classList.contains('prev') || 
-                e.target.classList.contains('next') ||
-                e.target.classList.contains('btn-primary') || 
-                e.target.closest('.btn-primary')) {
-                return;
-            }
-            abrirModal(p);
-        };
-
-        card.innerHTML = `
-            <div class="carousel-container" id="carousel-${p.id}" data-index="0" data-total="${imagenes.length}">
-                ${slidesHTML}
-                ${botonesHTML}
-            </div>
-            <div class="card-body">
-                <h3 class="card-title">${p.nombre}</h3>
-                <p class="card-text">${p.descripcion || ''}</p>
-                <p style="color:#aaa; font-size:0.8em;">Stock: ${p.stock}</p>
-                <div class="card-footer">
-                    <span class="price-tag">$${parseFloat(p.precio).toLocaleString()}</span>
-                </div>
-                <button class="btn-primary" onclick="event.stopPropagation(); comprar(${p.id})">🛒 Agregar</button>
-            </div>
-        `;
-        contenedor.appendChild(card);
-    });
-}
-
 </script>
 
 </body>
